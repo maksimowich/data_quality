@@ -47,9 +47,9 @@ from loguru import logger
 
 ROWS_AMOUNT_IN_ITERATION = 50
 
-def get_metrics(spark, calculation_date: dt.date, table_name: str, date_field: str):
-    logger.info(f"Расчёт отклонений для таблицы {table_name} за {calculation_date}")
-    logger.info(f'Начало расчета: {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+
+def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, date_field: str):
+    logger.info(f"Расчёт статистики для таблицы {table_name} за {calculation_date}")
 
     # Извлечение структуры из таблицы
     df_table_struct = spark.sql(f"DESCRIBE {table_name};").toPandas()
@@ -68,7 +68,7 @@ def get_metrics(spark, calculation_date: dt.date, table_name: str, date_field: s
         .reset_index(drop=True)
 
     columns = [
-        'table_name', 'column_name', 'report_date',
+        'table_name', 'column_name', 'calculation_date',
         'rows_amount_cnt', 'amount_completed_cnt', 'nulls_amount_cnt',
         'distinct_amount_cnt', 'minimum_value_info', 'maximum_value_info',
         'median_value_info', 'average_value_info', 'sum_attributes_nval',
@@ -85,7 +85,7 @@ def get_metrics(spark, calculation_date: dt.date, table_name: str, date_field: s
                     SELECT
                         '{table_name}' table_name,
                         '{row['col_name']}' column_name,
-                        to_date({date_field}) report_date,
+                        to_date({date_field}) calculation_date,
                         COUNT(*) rows_amount_cnt,
                         COUNT({row['col_name']}) amount_completed_cnt,
                         (COUNT(*) - COUNT({row['col_name']})) nulls_amount_cnt,
@@ -97,8 +97,8 @@ def get_metrics(spark, calculation_date: dt.date, table_name: str, date_field: s
                         SUM(CAST({row['col_name']} as Decimal(38,6))) sum_attributes_nval
                     FROM {table_name}
                     WHERE to_date({date_field}) = '{calculation_date}'
-                    GROUP BY column_name, report_date UNION ALL"""
-            query = f"{query[:-9]} ORDER BY column_name, report_date"
+                    GROUP BY column_name, calculation_date UNION ALL"""
+            query = f"{query[:-9]} ORDER BY column_name, calculation_date;"
             df_result_num = pd.concat([df_result_num, spark.sql(query).toPandas()])
 
     df_result_str = pd.DataFrame()
@@ -112,7 +112,7 @@ def get_metrics(spark, calculation_date: dt.date, table_name: str, date_field: s
                     SELECT
                         '{table_name}' table_name,
                         '{row['col_name']}' column_name,
-                        to_date({date_field}) report_date,
+                        to_date({date_field}) calculation_date,
                         COUNT(*) rows_amount_cnt,
                         COUNT({row['col_name']}) amount_completed_cnt,
                         (COUNT(*) - COUNT({row['col_name']})) nulls_amount_cnt,
@@ -124,8 +124,8 @@ def get_metrics(spark, calculation_date: dt.date, table_name: str, date_field: s
                         NULL sum_attributes_nval
                     FROM {table_name}
                     WHERE to_date({date_field}) = '{calculation_date}'
-                    GROUP BY column_name, report_date UNION ALL"""
-            query = f"{query[:-9]} ORDER BY column_name, report_date"
+                    GROUP BY column_name, calculation_date UNION ALL"""
+            query = f"{query[:-9]} ORDER BY column_name, calculation_date"
             df_result_str = pd.concat([df_result_str, spark.sql(query).toPandas()])
 
     # Объединение результатов двух расчётов
@@ -148,10 +148,53 @@ def get_metrics(spark, calculation_date: dt.date, table_name: str, date_field: s
                          df_table_struct[['col_name', 'data_type', 'comment']].reset_index(),
                          left_index=True, right_index=True)
     df_result['index'] = df_result['index'] + 1
-    df_result = df_result[res_columns].sort_values(['index', 'report_date'])
+    df_result = df_result[res_columns].sort_values(['index', 'calculation_date'])
     df_result['dublicate_cnt'] = df_result.duplicated().sum()
     df_result.rename({"index": "column_id"}, axis=1, inplace=True)
-    logger.info(f'1. Выполнен расчёт метрик за {calculation_date}: {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+    logger.info(f'Выполнен расчёт статистики за {calculation_date}')
+    df_result['report_dttm'] = pd.Timestamp('now')
+    return df_result
+
+
+def get_previous_existing_metrics(spark, calculation_date: dt.date, table_name: str):
+    open_date = dt.datetime.strptime('2100-01-01 00:00:00', "%Y-%m-%d %H:%M:%S")
+    df_previous_metrics = spark.sql(f"""
+        SELECT MAX(calculation_date) AS calculation_date
+        FROM {table_for_recording}
+        WHERE 1=1
+            AND calculation_date < '{calculation_date}'
+            AND table_name = '{table_name}';
+        """).toPandas()
+
+    if df_previous_metrics.iloc[0]['calculation_date']:
+        logger.info(f'{df_previous_metrics.iloc[0]["calculation_date"]}')
+        calculation_date = dt.datetime.strptime(df_previous_metrics.iloc[0]['calculation_date'], "%Y-%m-%d")
+        df_result = spark.sql(f"""
+            SELECT 
+                table_name, 
+                column_name, 
+                column_id,
+                data_type, 
+                comment_info, 
+                report_date,
+                rows_amount_cnt, 
+                amount_completed_cnt, 
+                nulls_amount_cnt,
+                distinct_amount_cnt, 
+                minimum_value_info, 
+                maximum_value_info,
+                median_value_info, 
+                average_value_info, 
+                sum_attributes_nval,
+                dublicate_cnt
+            FROM {table_for_recording}
+            WHERE 1=1
+                AND report_date = '{report_dt}'
+                AND table_name = '{table_name}'
+        """).toPandas()
+    else:
+        df_result = df_current_metrics.copy()
+
     return df_result
 
 
@@ -344,49 +387,6 @@ def metriks_func_one(current_date, table_name, date_field):
     # Получение статистических метрик по одному срезу
 
     # Получение статистических метрик за прошлый месяц
-    def prev_metrics(current_date, table_name, df_curr_metrics):
-        # Подключение к MS SQL Server
-        open_date = dt.datetime.strptime('2100-01-01 00:00:00', "%Y-%m-%d %H:%M:%S")
-        df_data = spark.sql(f"""
-            SELECT MAX(report_date) AS report_date
-            FROM {table_for_recording}
-            WHERE 1=1
-                AND report_date < '{current_date}'
-                AND table_name = '{table_name}'
-                AND period_to_dt = '{open_date}';
-        """).toPandas()
-
-        if df_data.iloc[0]['report_date']:
-            logging.info(f'{df_data.iloc[0]["report_date"]}')
-            report_dt = dt.datetime.strptime(df_data.iloc[0]['report_date'], "%Y-%m-%d %H:%M:%S")
-            df_result = spark.sql(f"""
-                SELECT 
-                    table_name, 
-                    column_name, 
-                    column_id,
-                    data_type, 
-                    comment_info, 
-                    report_date,
-                    rows_amount_cnt, 
-                    amount_completed_cnt, 
-                    nulls_amount_cnt,
-                    distinct_amount_cnt, 
-                    minimum_value_info, 
-                    maximum_value_info,
-                    median_value_info, 
-                    average_value_info, 
-                    sum_attributes_nval,
-                    dublicate_cnt
-                FROM {table_for_recording}
-                WHERE 1=1
-                    AND report_date = '{report_dt}'
-                    AND table_name = '{table_name}'
-                    AND period_to_dt = '{open_date}';
-            """).toPandas()
-        else:
-            df_result = df_curr_metrics.copy()
-
-        return df_result
 
     # Получение вручную заведённых пороговых значений по полям
     def setup_metrics(full_table_name):

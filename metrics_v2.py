@@ -84,8 +84,8 @@ def get_table_statistics(spark,
 
     res_columns = [
         'table_name', 'column_name',
-        'start_of_calculation_period', 'end_of_calculation_period', 'interval',
         'column_id', 'data_type', 'comment',
+        'start_of_calculation_period', 'end_of_calculation_period', 'interval',
         'rows_amount_cnt', 'amount_completed_cnt', 'nulls_amount_cnt',
         'distinct_amount_cnt', 'minimum_value_info', 'maximum_value_info',
         'median_value_info', 'average_value_info', 'sum_attributes_nval',
@@ -210,18 +210,29 @@ DELTA = {
 
 def compute_statistics(spark, current_date: dt.date):
     setup_table_df = spark.sql(f'''
+        WITH v AS (
+            SELECT
+                *,
+                ROW_NUMBER() OVER (PARTITION BY TABLE_NAME, INTERVAL_TYPE ORDER BY NEXT_CHECK_DT DESC) rn
+            FROM {SETUP_TABLE_NAME}
+            WHERE NEXT_CHECK_DT <= '{current_date}'
+        )
         SELECT *
-        FROM {SETUP_TABLE_NAME}
-        WHERE NEXT_CHECK_DT <= '{current_date}';
+        FROM v
+        WHERE rn = 1;
     ''').toPandas()
-    for row in setup_table_df.iterrows():
+    for index, row in setup_table_df.iterrows():
         table_name = row['TABLE_NAME']
         date_field = row['TABLE_DATE_FIELD']
         next_check_dt = row['NEXT_CHECK_DT']
-        interval = row['INTERVAL']
+        interval = row['INTERVAL_TYPE']
         delta = DELTA[interval]
         while next_check_dt <= current_date:
             end_of_calculation_period = next_check_dt - dt.timedelta(days=1)
             table_statistics_df = get_table_statistics(spark, table_name, date_field, interval, end_of_calculation_period)
             insert_statistics(spark, table_statistics_df)
             next_check_dt = next_check_dt + delta
+        spark.sql(f'''
+            INSERT INTO {SETUP_TABLE_NAME} VALUES 
+            ('{table_name}', '{date_field}', cast('{next_check_dt}' as date), '{interval}');
+            ''')

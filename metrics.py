@@ -156,48 +156,6 @@ def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, d
     return df_result
 
 
-def get_previous_existing_metrics(spark, calculation_date: dt.date, table_name: str):
-    open_date = dt.datetime.strptime('2100-01-01 00:00:00', "%Y-%m-%d %H:%M:%S")
-    df_previous_metrics = spark.sql(f"""
-        SELECT MAX(calculation_date) AS calculation_date
-        FROM {table_for_recording}
-        WHERE 1=1
-            AND calculation_date < '{calculation_date}'
-            AND table_name = '{table_name}';
-        """).toPandas()
-
-    if df_previous_metrics.iloc[0]['calculation_date']:
-        logger.info(f'{df_previous_metrics.iloc[0]["calculation_date"]}')
-        calculation_date = dt.datetime.strptime(df_previous_metrics.iloc[0]['calculation_date'], "%Y-%m-%d")
-        df_result = spark.sql(f"""
-            SELECT 
-                table_name, 
-                column_name, 
-                column_id,
-                data_type, 
-                comment_info, 
-                report_date,
-                rows_amount_cnt, 
-                amount_completed_cnt, 
-                nulls_amount_cnt,
-                distinct_amount_cnt, 
-                minimum_value_info, 
-                maximum_value_info,
-                median_value_info, 
-                average_value_info, 
-                sum_attributes_nval,
-                dublicate_cnt
-            FROM {table_for_recording}
-            WHERE 1=1
-                AND report_date = '{report_dt}'
-                AND table_name = '{table_name}'
-        """).toPandas()
-    else:
-        df_result = df_current_metrics.copy()
-
-    return df_result
-
-
 def metriks_func():
 
     table_temp = spark.sql(sqlQuery=f"""

@@ -1,0 +1,32 @@
+------------------- статистика по таблицам ------------------------------
+create table test.dq_table_statistics (
+    table_name                  string,
+    column_name                 string,
+    column_id                   bigint,
+    data_type                   string,
+    comment                     string,
+    start_of_calculation_period date,
+    end_of_calculation_period   date,
+    interval                    string,
+    calculation_date            date,
+    rows_amount_cnt             int,
+    amount_completed_cnt        int,
+    nulls_amount_cnt            int,
+    distinct_amount_cnt         int,
+    minimum_value_info          decimal(19,2),
+    maximum_value_info          decimal(19,2),
+    median_value_info           decimal(19,2),
+    average_value_info          decimal(19,2),
+    sum_attributes_nval         decimal(19,2),
+    dublicate_cnt               int,
+    report_dttm                 timestamp
+) stored as parquet;
+
+
+--------------- таблица с информацией как и что проверять -----------------------
+create table test.dq_setup_table (
+    TABLE_NAME                      string,
+    TABLE_DATE_FIELD                string,
+    NEXT_CHECK_DT                   date,
+    INTERVAL                        string
+) stored as parquet;

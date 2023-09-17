@@ -2,12 +2,15 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import re
+from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from loguru import logger
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DateType, TimestampType, DecimalType
 
 
 ROWS_AMOUNT_IN_ITERATION = 50
+
+SETUP_TABLE_NAME = 'test.dq_setup_table'
 
 STATISTICS_TABLE_NAME = 'test.dq_table_statistics'
 FLOAT_FIELDS_IN_STATISTICS_TABLE = [
@@ -49,14 +52,25 @@ def float_to_decimal(precision: int):
         return lambda x: Decimal(int(x))
 
 
-def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, date_field: str):
-    logger.info(f"Расчёт статистики для таблицы {table_name} за {calculation_date}")
+def get_table_statistics(spark,
+                         table_name: str,
+                         date_field: str,
+                         interval: str,
+                         end_of_calculation_period: dt.date):
+    start_of_calculation_period = None
+    if interval == 'day':
+        start_of_calculation_period = end_of_calculation_period
+        logger.info(f"Расчёт статистики для таблицы {table_name} за {end_of_calculation_period}")
+    elif interval == 'week':
+        start_of_calculation_period = end_of_calculation_period - dt.timedelta(days=6)
+        logger.info(f"Расчёт статистики для таблицы {table_name} за неделю {start_of_calculation_period} - {end_of_calculation_period}")
+    elif interval == 'month':
+        start_of_calculation_period = end_of_calculation_period.replace(day=1)
+        end_of_calculation_period = (end_of_calculation_period + relativedelta(months=1)).replace(day=1) - dt.timedelta(days=1)
+        logger.info(f"Расчёт статистики для таблицы {table_name} за неделю {start_of_calculation_period} - {end_of_calculation_period}")
 
     # Извлечение структуры из таблицы
     df_table_struct = spark.sql(f"DESCRIBE {table_name};").toPandas()
-
-    # Замена типов данных формата "varchar(*)" на "varchar"
-    df_table_struct['data_type'] = df_table_struct['data_type'].str.split('(').str[0]
 
     df_table_struct = df_table_struct[~df_table_struct['col_name'].isin([date_field])]
 
@@ -68,8 +82,10 @@ def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, d
     df_table_struct_str = df_table_struct[df_table_struct['data_type'].isin(['string', 'timestamp', 'varchar'])] \
         .reset_index(drop=True)
 
-    columns = [
-        'table_name', 'column_name', 'calculation_date',
+    res_columns = [
+        'table_name', 'column_name',
+        'start_of_calculation_period', 'end_of_calculation_period', 'interval',
+        'column_id', 'data_type', 'comment',
         'rows_amount_cnt', 'amount_completed_cnt', 'nulls_amount_cnt',
         'distinct_amount_cnt', 'minimum_value_info', 'maximum_value_info',
         'median_value_info', 'average_value_info', 'sum_attributes_nval',
@@ -86,7 +102,9 @@ def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, d
                     SELECT
                         '{table_name}' table_name,
                         '{row['col_name']}' column_name,
-                        to_date({date_field}) calculation_date,
+                        to_date('{start_of_calculation_period}') start_of_calculation_period,
+                        to_date('{end_of_calculation_period}') end_of_calculation_period,
+                        '{interval}' interval,
                         COUNT(*) rows_amount_cnt,
                         COUNT({row['col_name']}) amount_completed_cnt,
                         (COUNT(*) - COUNT({row['col_name']})) nulls_amount_cnt,
@@ -97,9 +115,9 @@ def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, d
                         AVG(CAST({row['col_name']} as Decimal(38,6))) average_value_info,
                         SUM(CAST({row['col_name']} as Decimal(38,6))) sum_attributes_nval
                     FROM {table_name}
-                    WHERE to_date({date_field}) = '{calculation_date}'
-                    GROUP BY column_name, calculation_date UNION ALL"""
-            query = f"{query[:-9]} ORDER BY column_name, calculation_date;"
+                    WHERE to_date({date_field}) BETWEEN  '{start_of_calculation_period}' AND '{end_of_calculation_period}'
+                    GROUP BY column_name UNION ALL"""
+            query = f"{query[:-9]} ORDER BY column_name, end_of_calculation_period;"
             df_result_num = pd.concat([df_result_num, spark.sql(query).toPandas()])
 
     df_result_str = pd.DataFrame()
@@ -113,7 +131,9 @@ def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, d
                     SELECT
                         '{table_name}' table_name,
                         '{row['col_name']}' column_name,
-                        to_date({date_field}) calculation_date,
+                        to_date('{start_of_calculation_period}') start_of_calculation_period,
+                        to_date('{end_of_calculation_period}') end_of_calculation_period,
+                        '{interval}' interval,
                         COUNT(*) rows_amount_cnt,
                         COUNT({row['col_name']}) amount_completed_cnt,
                         (COUNT(*) - COUNT({row['col_name']})) nulls_amount_cnt,
@@ -124,9 +144,9 @@ def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, d
                         NULL average_value_info,
                         NULL sum_attributes_nval
                     FROM {table_name}
-                    WHERE to_date({date_field}) = '{calculation_date}'
-                    GROUP BY column_name, calculation_date UNION ALL"""
-            query = f"{query[:-9]} ORDER BY column_name, calculation_date"
+                    WHERE to_date({date_field}) BETWEEN '{start_of_calculation_period}' AND '{end_of_calculation_period}'
+                    GROUP BY column_name UNION ALL"""
+            query = f"{query[:-9]} ORDER BY column_name, end_of_calculation_period"
             df_result_str = pd.concat([df_result_str, spark.sql(query).toPandas()])
 
     # Объединение результатов двух расчётов
@@ -136,16 +156,17 @@ def get_statistics_for_date(spark, calculation_date: dt.date, table_name: str, d
     for float_field in FLOAT_FIELDS_IN_STATISTICS_TABLE:
         df_result[float_field] = df_result[float_field].astype('float64')
 
-    # Добавим индекс столбцов, чтобы сортировать результаты в порядке, совпадающем с исходной таблицей
-    res_columns = columns[:2] + ['index', 'data_type', 'comment'] + columns[2:]
-    df_result = pd.merge(df_result,
-                         df_table_struct[['col_name', 'data_type', 'comment']].reset_index(),
-                         left_index=True, right_index=True)
-    df_result['index'] = df_result['index'] + 1
-    df_result = df_result[res_columns].sort_values(['index', 'calculation_date'])
+    df_result = pd.merge(df_result, df_table_struct, left_on='column_name', right_on='col_name')
+    df_result.reset_index(inplace=True)
+    df_result['column_id'] = df_result.index
+    df_result = df_result[res_columns].sort_values(['column_id', 'end_of_calculation_period', 'interval'])
     df_result['dublicate_cnt'] = df_result.duplicated().sum()
-    df_result.rename({"index": "column_id"}, axis=1, inplace=True)
-    logger.info(f'Выполнен расчёт статистики за {calculation_date}')
+
+    if interval == 'day':
+        logger.info(f'Выполнен расчёт статистики за {end_of_calculation_period}')
+    else:
+        logger.info(f'Выполнен расчёт статистики за {start_of_calculation_period} - {end_of_calculation_period}')
+
     df_result['report_dttm'] = pd.Timestamp('now')
     return df_result
 
@@ -158,3 +179,49 @@ def insert_statistics(spark, df_statistics):
     spark_df = spark.createDataFrame(df_statistics_copy, schema=table_schema)
     spark_df.write.format('hive').mode('append').saveAsTable(STATISTICS_TABLE_NAME)
     logger.info(f'Выполнена вставка в таблицу вычисленной статистики')
+
+
+def get_previous_existing_metircs(spark,
+                                  end_of_calculation_period: dt.date,
+                                  interval: str,
+                                  table_name: str):
+    previous_metrics = spark.sql(f'''
+        WITH v AS (
+            SELECT
+                *,
+                rank() OVER (ORDER BY end_of_calculation_period DESC, report_dttm DESC) AS rnk
+            FROM {STATISTICS_TABLE_NAME}
+            WHERE 1=1
+                AND table_name = '{table_name}'
+                AND end_of_calculation_period < '{end_of_calculation_period}'
+                AND interval = '{interval}'
+        )
+        SELECT * FROM v WHERE rnk = 1;
+    ''').toPandas()
+    return previous_metrics
+
+
+DELTA = {
+    'day': dt.timedelta(days=1),
+    'week': dt.timedelta(days=7),
+    'month': relativedelta(months=1),
+}
+
+
+def compute_statistics(spark, current_date: dt.date):
+    setup_table_df = spark.sql(f'''
+        SELECT *
+        FROM {SETUP_TABLE_NAME}
+        WHERE NEXT_CHECK_DT <= '{current_date}';
+    ''').toPandas()
+    for row in setup_table_df.iterrows():
+        table_name = row['TABLE_NAME']
+        date_field = row['TABLE_DATE_FIELD']
+        next_check_dt = row['NEXT_CHECK_DT']
+        interval = row['INTERVAL']
+        delta = DELTA[interval]
+        while next_check_dt <= current_date:
+            end_of_calculation_period = next_check_dt - dt.timedelta(days=1)
+            table_statistics_df = get_table_statistics(spark, table_name, date_field, interval, end_of_calculation_period)
+            insert_statistics(spark, table_statistics_df)
+            next_check_dt = next_check_dt + delta

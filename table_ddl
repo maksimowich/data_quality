@@ -7,8 +7,7 @@ create table test.dq_table_statistics (
     comment                     string,
     start_of_calculation_period date,
     end_of_calculation_period   date,
-    interval                    string,
-    calculation_date            date,
+    interval_type               string,
     rows_amount_cnt             int,
     amount_completed_cnt        int,
     nulls_amount_cnt            int,
@@ -28,5 +27,53 @@ create table test.dq_setup_table (
     TABLE_NAME                      string,
     TABLE_DATE_FIELD                string,
     NEXT_CHECK_DT                   date,
-    INTERVAL                        string
+    INTERVAL_TYPE                   string
+) stored as parquet;
+
+
+create table test.dq_deviations_setup as (
+    table_name string,
+    column_name string,
+    rows_amount_cnt decimal(19,2),
+    amount_completed_cnt decimal(19,2),
+    nulls_amount_cnt decimal(19,2),
+    distinct_amount_cnt decimal(19,2),
+    minimum_value_info decimal(19,2),
+    maximum_value_info decimal(19,2),
+    median_value_info decimal(19,2),
+    average_value_info decimal(19,2),
+    sum_attributes_nval decimal(19,2),
+    period_to_dt date
+) stored as parquet;
+
+
+create table upd.airflow.metrics (
+    table_name                          string,
+    column_name                         string,
+    comment                             string,
+    data_type                           string,
+    column_id                           int,
+    comparison_dt                       date,
+    report_dttm                         timestamp,
+    rows_amount_cnt                     int,
+    delta_rows_amount_cnt               decimal(19,2),
+    amount_completed_cnt                int,
+    delta_amount_completed_cnt          decimal(19,2),
+    nulls_amount_cnt                    int,
+    delta_nulls_amount_cnt              decimal(19,2),
+    distinct_amount_cnt                 int,
+    delta_distinct_amount_cnt           decimal(19,2),
+    minimum_value_info                  decimal(19,2),
+    delta_minimum_value_info            decimal(19,2),
+    maximum_value_info                  decimal(19,2),
+    delta_maximum_value_info            decimal(19,2),
+    median_value_info                   decimal(19,2),
+    delta_median_value_info             decimal(19,2),
+    average_value_info                  decimal(19,2),
+    delta_average_value_info            decimal(19,2),
+    sum_attributes_nval                 decimal(19,2),
+    delta_sum_attributes_nval           decimal(19,2),
+    dublicate_cnt                       int,
+    deviation_flg                       int,
+    deviation_desc                      string,
 ) stored as parquet;

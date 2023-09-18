@@ -1,8 +1,6 @@
-from datetime import date, timedelta
-from dateutil.relativedelta import relativedelta
-
-start = date(2023, 2, 28).replace(day=1)
-end = (date(2023, 2, 28) + relativedelta(months=1)).replace(day=1) - timedelta(days=1)
-
-print(f"start {start}")
-print(f"end {end}")
+from numpy import NAN
+import pandas as pd
+import numpy as np
+s = pd.Series([1231.414, 414.1424, 1414.31, None])
+print(s[3])
+print(np.isnan(s[3]))

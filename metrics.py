@@ -368,316 +368,313 @@ def metriks_func_one(current_date, table_name, date_field):
         logging.info(f"3. Выполнено извлечение порогов из настроечной таблицы: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         return df_setup
 
-    # Расчёт отклонений
-    def get_deviation(current_date, full_table_name, date_field):
-        # Преобразование даты под формат даты среза
-        # report_dttm = transformation(current_date, date_field, full_table_name)
-        # Получение статистических метрик по одному срезу
-        df_curr_metrics = curr_metrics(current_date, full_table_name, date_field)
-        # Получение статистических метрик за прошлый месяц
-        # current_date,
-        df_prev_metrics = prev_metrics(current_date, full_table_name, df_curr_metrics)
 
-        # Объединение срезов по 'table_name', 'column_name', 'index', 'data_type', 'comment_info'
-        df_merged = pd.merge(df_curr_metrics,
-                             df_prev_metrics,
-                             how='left',
-                             on=['table_name', 'column_name', 'column_id', 'data_type', 'comment_info'],
-                             suffixes=('_curr', '_prev'))
+def get_deviation(current_date, full_table_name, date_field):
+    df_curr_metrics = curr_metrics(current_date, full_table_name, date_field)
+    # Получение статистических метрик за прошлый месяц
+    # current_date,
+    df_prev_metrics = prev_metrics(current_date, full_table_name, df_curr_metrics)
 
-        old_date = date.today().replace(year=2000, month=1, day=1)
-        df_merged.report_date_prev.fillna(old_date, inplace=True)
+    # Объединение срезов по 'table_name', 'column_name', 'index', 'data_type', 'comment_info'
+    df_merged = pd.merge(df_curr_metrics,
+                         df_prev_metrics,
+                         how='left',
+                         on=['table_name', 'column_name', 'column_id', 'data_type', 'comment_info'],
+                         suffixes=('_curr', '_prev'))
+
+    old_date = date.today().replace(year=2000, month=1, day=1)
+    df_merged.report_date_prev.fillna(old_date, inplace=True)
 
 
-        # Расчёт отклонений по поля
-        ROWS_AMOUNT_IN_ITERATION_list, amount_completed_list, nulls_amount_list, nulls_amount_prc_list, distinct_amount_list, minimum_value_list, maximum_value_list, median_value_list, average_value_list, sum_attributes_list = [], [], [], [], [], [], [], [], [], []
-        for i in range(df_merged.shape[0]):
-            # Расчет дельты общего количества строк
-            if min(df_merged.at[i, 'rows_amount_cnt_curr'], df_merged.at[i, 'rows_amount_cnt_prev']) != 0:
-                q = round((abs((df_merged.at[i, 'rows_amount_cnt_curr'] - df_merged.at[i, 'rows_amount_cnt_prev']) /
-                               min(df_merged.at[i, 'rows_amount_cnt_curr'],
-                                   df_merged.at[i, 'rows_amount_cnt_prev']) * 100)), 2)
-                ROWS_AMOUNT_IN_ITERATION_list.append(q)
-            elif df_merged.at[i, 'rows_amount_cnt_curr'] == 0 and df_merged.at[i, 'rows_amount_cnt_prev'] == 0:
-                ROWS_AMOUNT_IN_ITERATION_list.append(0)
+    # Расчёт отклонений по поля
+    ROWS_AMOUNT_IN_ITERATION_list, amount_completed_list, nulls_amount_list, nulls_amount_prc_list, distinct_amount_list, minimum_value_list, maximum_value_list, median_value_list, average_value_list, sum_attributes_list = [], [], [], [], [], [], [], [], [], []
+    for i in range(df_merged.shape[0]):
+        # Расчет дельты общего количества строк
+        if min(df_merged.at[i, 'rows_amount_cnt_curr'], df_merged.at[i, 'rows_amount_cnt_prev']) != 0:
+            q = round((abs((df_merged.at[i, 'rows_amount_cnt_curr'] - df_merged.at[i, 'rows_amount_cnt_prev']) /
+                           min(df_merged.at[i, 'rows_amount_cnt_curr'],
+                               df_merged.at[i, 'rows_amount_cnt_prev']) * 100)), 2)
+            ROWS_AMOUNT_IN_ITERATION_list.append(q)
+        elif df_merged.at[i, 'rows_amount_cnt_curr'] == 0 and df_merged.at[i, 'rows_amount_cnt_prev'] == 0:
+            ROWS_AMOUNT_IN_ITERATION_list.append(0)
+        else:
+            ROWS_AMOUNT_IN_ITERATION_list.append(100)
+        # Расчет дельты количества заполненных строк
+        if min(df_merged.at[i, 'amount_completed_cnt_curr'],
+               df_merged.at[i, 'amount_completed_cnt_prev']) != 0:
+            q = round(
+                (abs((df_merged.at[i, 'amount_completed_cnt_curr'] - df_merged.at[
+                    i, 'amount_completed_cnt_prev']) /
+                     min(df_merged.at[i, 'amount_completed_cnt_curr'],
+                         df_merged.at[i, 'amount_completed_cnt_prev']) * 100)), 2)
+            amount_completed_list.append(q)
+        elif df_merged.at[i, 'amount_completed_cnt_curr'] == 0 and df_merged.at[
+            i, 'amount_completed_cnt_prev'] == 0:
+            amount_completed_list.append(0)
+        else:
+            amount_completed_list.append(100)
+            # Расчет дельты количества пустых значений
+        if min(df_merged.at[i, 'nulls_amount_cnt_curr'], df_merged.at[i, 'nulls_amount_cnt_prev']) != 0:
+            q = round(
+                (abs((df_merged.at[i, 'nulls_amount_cnt_curr'] - df_merged.at[i, 'nulls_amount_cnt_prev']) /
+                     min(df_merged.at[i, 'nulls_amount_cnt_curr'],
+                         df_merged.at[i, 'nulls_amount_cnt_prev']) * 100)), 2)
+            nulls_amount_list.append(q)
+        elif df_merged.at[i, 'nulls_amount_cnt_curr'] == 0 and df_merged.at[i, 'nulls_amount_cnt_prev'] == 0:
+            nulls_amount_list.append(0)
+        else:
+            nulls_amount_list.append(100)
+        # Расчет дельты уникальных значений
+        if min(df_merged.at[i, 'distinct_amount_cnt_curr'],
+               df_merged.at[i, 'distinct_amount_cnt_prev']) != 0:
+            q = round((abs((df_merged.at[i, 'distinct_amount_cnt_curr'] - df_merged.at[
+                i, 'distinct_amount_cnt_prev']) /
+                           min(df_merged.at[i, 'distinct_amount_cnt_curr'],
+                               df_merged.at[i, 'distinct_amount_cnt_prev']) * 100)), 2)
+            distinct_amount_list.append(q)
+        elif df_merged.at[i, 'distinct_amount_cnt_curr'] == 0 and \
+                df_merged.at[i, 'distinct_amount_cnt_prev'] == 0:
+            distinct_amount_list.append(0)
+        else:
+            distinct_amount_list.append(100)
+        # Расчет дельты минимальных значений
+        if min(df_merged.at[i, 'minimum_value_info_curr'], df_merged.at[i, 'minimum_value_info_prev']) != 0:
+            q = round(
+                (abs((df_merged.at[i, 'minimum_value_info_curr'] - df_merged.at[i, 'minimum_value_info_prev']) /
+                     min(df_merged.at[i, 'minimum_value_info_curr'],
+                         df_merged.at[i, 'minimum_value_info_prev']) * 100)), 2)
+            minimum_value_list.append(q)
+        elif df_merged.at[i, 'minimum_value_info_curr'] == 0 and df_merged.at[
+             i, 'minimum_value_info_prev'] == 0:
+            minimum_value_list.append(0)
+        else:
+            minimum_value_list.append(100)
+        # Расчет дельты максимальных значений
+        if min(df_merged.at[i, 'maximum_value_info_curr'], df_merged.at[i, 'maximum_value_info_prev']) != 0:
+            q = round(
+                (abs((df_merged.at[i, 'maximum_value_info_curr'] - df_merged.at[i, 'maximum_value_info_prev']) /
+                     min(df_merged.at[i, 'maximum_value_info_curr'],
+                         df_merged.at[i, 'maximum_value_info_prev']) * 100)), 2)
+            maximum_value_list.append(q)
+        elif df_merged.at[i, 'maximum_value_info_curr'] == 0 and df_merged.at[
+            i, 'maximum_value_info_prev'] == 0:
+            maximum_value_list.append(0)
+        else:
+            maximum_value_list.append(100)
+        # Расчет дельты медианы
+        if min(df_merged.at[i, 'median_value_info_curr'], df_merged.at[i, 'median_value_info_prev']) != 0:
+            q = round(
+                (abs((df_merged.at[i, 'median_value_info_curr'] - df_merged.at[i, 'median_value_info_prev']) /
+                     min(df_merged.at[i, 'median_value_info_curr'],
+                         df_merged.at[i, 'median_value_info_prev']) * 100)), 2)
+            median_value_list.append(q)
+        elif df_merged.at[i, 'median_value_info_curr'] == 0 and df_merged.at[
+            i, 'median_value_info_prev'] == 0:
+            median_value_list.append(0)
+        else:
+            median_value_list.append(100)
+        # Расчет дельты средних значений
+        if min(df_merged.at[i, 'average_value_info_curr'], df_merged.at[i, 'average_value_info_prev']) != 0:
+            q = round(
+                (abs((df_merged.at[i, 'average_value_info_curr'] - df_merged.at[i, 'average_value_info_prev']) /
+                     min(df_merged.at[i, 'average_value_info_curr'],
+                         df_merged.at[i, 'average_value_info_prev']) * 100)), 2)
+            average_value_list.append(q)
+        elif df_merged.at[i, 'average_value_info_curr'] == 0 and df_merged.at[
+            i, 'average_value_info_prev'] == 0:
+            average_value_list.append(0)
+        else:
+            average_value_list.append(100)
+        # Расчет суммы атрибутов поля
+        if min(df_merged.at[i, 'sum_attributes_nval_curr'],
+               df_merged.at[i, 'sum_attributes_nval_prev']) != 0:
+            q = round((abs((df_merged.at[i, 'sum_attributes_nval_curr'] - df_merged.at[
+                i, 'sum_attributes_nval_prev']) /
+                           min(df_merged.at[i, 'sum_attributes_nval_curr'],
+                               df_merged.at[i, 'sum_attributes_nval_prev']) * 100)), 2)
+            sum_attributes_list.append(q)
+        elif df_merged.at[i, 'sum_attributes_nval_curr'] == 0 and df_merged.at[
+             i, 'sum_attributes_nval_prev'] == 0:
+            sum_attributes_list.append(0)
+        else:
+            sum_attributes_list.append(100)
+
+    df_merged['ROWS_AMOUNT_IN_ITERATION_delta'] = ROWS_AMOUNT_IN_ITERATION_list
+    df_merged['amount_completed_delta'] = amount_completed_list
+    df_merged['nulls_amount_delta'] = nulls_amount_list
+    df_merged['distinct_amount_delta'] = distinct_amount_list
+    df_merged['minimum_value_delta'] = minimum_value_list
+    df_merged['maximum_value_delta'] = maximum_value_list
+    df_merged['median_value_delta'] = median_value_list
+    df_merged['average_value_delta'] = average_value_list
+    df_merged['sum_attributes_delta'] = sum_attributes_list
+
+    # Получение вручную заведённых пороговых значений по полям
+    df_setup = setup_metrics(full_table_name)
+    # Объединение со значениями порогов по 'column_name'
+    df_limit = pd.merge(df_merged['column_name'], df_setup, how='left', on='column_name').fillna(proc)
+    df_merged = pd.merge(df_merged, df_limit, on='column_name')
+
+    # Расчёт флагов отклонений по каждому из полей
+    df_merged['ROWS_AMOUNT_IN_ITERATION_flg'] = np.select([df_merged['ROWS_AMOUNT_IN_ITERATION_delta'] >
+                                              df_merged['ROWS_AMOUNT_IN_ITERATION_limit']], [1], 0)
+    df_merged['amount_completed_flg'] = np.select([df_merged['amount_completed_delta'] >
+                                                   df_merged['amount_completed_limit']], [1], 0)
+    df_merged['nulls_amount_flg'] = np.select([df_merged['nulls_amount_delta'] >
+                                               df_merged['nulls_amount_limit']], [1], 0)
+    df_merged['distinct_amount_flg'] = np.select([df_merged['distinct_amount_delta'] >
+                                                  df_merged['distinct_amount_limit']], [1], 0)
+    df_merged['minimum_value_flg'] = np.select([df_merged['minimum_value_delta'] >
+                                                df_merged['minimum_value_limit']], [1], 0)
+    df_merged['maximum_value_flg'] = np.select([df_merged['maximum_value_delta'] >
+                                                df_merged['maximum_value_limit']], [1], 0)
+    df_merged['median_value_flg'] = np.select([df_merged['median_value_delta'] >
+                                               df_merged['median_value_limit']], [1], 0)
+    df_merged['average_value_flg'] = np.select([df_merged['average_value_delta'] >
+                                                df_merged['average_value_limit']], [1], 0)
+    df_merged['sum_attributes_flg'] = np.select([df_merged['sum_attributes_delta'] >
+                                                 df_merged['sum_attributes_limit']], [1], 0)
+    df_merged['dublicate_cnt_flg'] = np.select([df_merged['dublicate_cnt_curr'] > 0], [1], 0)
+    # df_merged.replace(np.inf, None, inplace = True)
+    df_merged['deviation_flg'] = 0
+    df_merged['deviation_desc'] = ''
+
+    # Расчёт общего флага и описания полученных отклонений
+    for index, row in df_merged.iterrows():
+        if row['ROWS_AMOUNT_IN_ITERATION_flg'] == 1 or row['amount_completed_flg'] == 1 or row['nulls_amount_flg'] == 1 \
+        or row['dublicate_cnt_flg'] == 1 or row['distinct_amount_flg'] or row['minimum_value_flg'] == 1 \
+        or row['maximum_value_flg'] == 1 or row['median_value_flg'] == 1 or row['average_value_flg'] \
+        or row['sum_attributes_flg'] == 1:
+            df_merged.at[index, 'deviation_flg'] = 1
+
+        deviation_desc = ""
+        if row['ROWS_AMOUNT_IN_ITERATION_flg'] == 1:
+            if (row['rows_amount_cnt_curr'] == 0 or row['rows_amount_cnt_prev'] == 0) and row[
+                'rows_amount_cnt_curr'] != \
+                    row['rows_amount_cnt_prev']:
+                deviation_desc += "Дельта по показателю ROWS_AMOUNT_IN_ITERATION не считаема, так как " \
+                                  "значение в одном из срезов = 0, "
             else:
-                ROWS_AMOUNT_IN_ITERATION_list.append(100)
-            # Расчет дельты количества заполненных строк
-            if min(df_merged.at[i, 'amount_completed_cnt_curr'],
-                   df_merged.at[i, 'amount_completed_cnt_prev']) != 0:
-                q = round(
-                    (abs((df_merged.at[i, 'amount_completed_cnt_curr'] - df_merged.at[
-                        i, 'amount_completed_cnt_prev']) /
-                         min(df_merged.at[i, 'amount_completed_cnt_curr'],
-                             df_merged.at[i, 'amount_completed_cnt_prev']) * 100)), 2)
-                amount_completed_list.append(q)
-            elif df_merged.at[i, 'amount_completed_cnt_curr'] == 0 and df_merged.at[
-                i, 'amount_completed_cnt_prev'] == 0:
-                amount_completed_list.append(0)
+                deviation_desc += "Отклонение по столбцу rows_amount_cnt " + str(
+                    round(row['ROWS_AMOUNT_IN_ITERATION_delta'], 2)) + "%, "
+        if row['amount_completed_flg'] == 1:
+            if (row['amount_completed_cnt_curr'] == 0 or ['amount_completed_cnt_prev'] == 0) and \
+            row['amount_completed_cnt_curr'] != row['amount_completed_cnt_prev']:
+                deviation_desc += "Дельта по показателю amount_completed не считаема, " \
+                                  "так как значение в одном из срезов = 0, "
             else:
-                amount_completed_list.append(100)
-                # Расчет дельты количества пустых значений
-            if min(df_merged.at[i, 'nulls_amount_cnt_curr'], df_merged.at[i, 'nulls_amount_cnt_prev']) != 0:
-                q = round(
-                    (abs((df_merged.at[i, 'nulls_amount_cnt_curr'] - df_merged.at[i, 'nulls_amount_cnt_prev']) /
-                         min(df_merged.at[i, 'nulls_amount_cnt_curr'],
-                             df_merged.at[i, 'nulls_amount_cnt_prev']) * 100)), 2)
-                nulls_amount_list.append(q)
-            elif df_merged.at[i, 'nulls_amount_cnt_curr'] == 0 and df_merged.at[i, 'nulls_amount_cnt_prev'] == 0:
-                nulls_amount_list.append(0)
+                deviation_desc += "Отклонение по столбцу amount_completed_cnt " + str(
+                    round(row['amount_completed_delta'], 2)) + "%, "
+        if row['nulls_amount_flg'] == 1:
+            if (row['nulls_amount_cnt_curr'] == 0 or row['nulls_amount_cnt_prev'] == 0) and \
+            row['nulls_amount_cnt_curr'] != row['nulls_amount_cnt_curr']:
+                deviation_desc += "Дельта по показателю nulls_amount не считаема, так как " \
+                                  "значение в одном из срезов = 0, "
             else:
-                nulls_amount_list.append(100)
-            # Расчет дельты уникальных значений
-            if min(df_merged.at[i, 'distinct_amount_cnt_curr'],
-                   df_merged.at[i, 'distinct_amount_cnt_prev']) != 0:
-                q = round((abs((df_merged.at[i, 'distinct_amount_cnt_curr'] - df_merged.at[
-                    i, 'distinct_amount_cnt_prev']) /
-                               min(df_merged.at[i, 'distinct_amount_cnt_curr'],
-                                   df_merged.at[i, 'distinct_amount_cnt_prev']) * 100)), 2)
-                distinct_amount_list.append(q)
-            elif df_merged.at[i, 'distinct_amount_cnt_curr'] == 0 and \
-                    df_merged.at[i, 'distinct_amount_cnt_prev'] == 0:
-                distinct_amount_list.append(0)
+                deviation_desc += "Отклонение по столбцу nulls_amount_cnt " + str(
+                    round(row['nulls_amount_delta'], 2)) + "%, "
+        if row['distinct_amount_flg'] == 1:
+            if (row['distinct_amount_cnt_curr'] == 0 or row['distinct_amount_cnt_prev'] == 0) and \
+            row['distinct_amount_cnt_curr'] != row['distinct_amount_cnt_prev']:
+                deviation_desc += "Дельта по показателю distinct_amount не считаема, так как " \
+                                  "значение в одном из срезов = 0, "
             else:
-                distinct_amount_list.append(100)
-            # Расчет дельты минимальных значений
-            if min(df_merged.at[i, 'minimum_value_info_curr'], df_merged.at[i, 'minimum_value_info_prev']) != 0:
-                q = round(
-                    (abs((df_merged.at[i, 'minimum_value_info_curr'] - df_merged.at[i, 'minimum_value_info_prev']) /
-                         min(df_merged.at[i, 'minimum_value_info_curr'],
-                             df_merged.at[i, 'minimum_value_info_prev']) * 100)), 2)
-                minimum_value_list.append(q)
-            elif df_merged.at[i, 'minimum_value_info_curr'] == 0 and df_merged.at[
-                 i, 'minimum_value_info_prev'] == 0:
-                minimum_value_list.append(0)
+                deviation_desc += "Отклонение по столбцу distinct_amount_cnt " + str(
+                    round(row['distinct_amount_delta'], 2)) + "%, "
+        if row['minimum_value_flg'] == 1:
+            if (row['minimum_value_info_curr'] == 0 or row['minimum_value_info_prev'] == 0) and \
+            row['minimum_value_info_curr'] != row['minimum_value_info_prev']:
+                deviation_desc += "Дельта по показателю minimum_value не считаема, так как " \
+                                  "значение в одном из срезов = 0, "
             else:
-                minimum_value_list.append(100)
-            # Расчет дельты максимальных значений
-            if min(df_merged.at[i, 'maximum_value_info_curr'], df_merged.at[i, 'maximum_value_info_prev']) != 0:
-                q = round(
-                    (abs((df_merged.at[i, 'maximum_value_info_curr'] - df_merged.at[i, 'maximum_value_info_prev']) /
-                         min(df_merged.at[i, 'maximum_value_info_curr'],
-                             df_merged.at[i, 'maximum_value_info_prev']) * 100)), 2)
-                maximum_value_list.append(q)
-            elif df_merged.at[i, 'maximum_value_info_curr'] == 0 and df_merged.at[
-                i, 'maximum_value_info_prev'] == 0:
-                maximum_value_list.append(0)
+                deviation_desc += "Отклонение по столбцу minimum_value_info " + str(
+                    round(row['minimum_value_delta'], 2)) + "%, "
+        if row['maximum_value_flg'] == 1:
+            if (row['maximum_value_info_curr'] == 0 or row['maximum_value_info_prev'] == 0) and \
+            row['maximum_value_info_curr'] != row['maximum_value_info_prev']:
+                deviation_desc += "Дельта по показателю maximum_value не считаема, так как " \
+                                  "значение в одном из срезов = 0, "
             else:
-                maximum_value_list.append(100)
-            # Расчет дельты медианы
-            if min(df_merged.at[i, 'median_value_info_curr'], df_merged.at[i, 'median_value_info_prev']) != 0:
-                q = round(
-                    (abs((df_merged.at[i, 'median_value_info_curr'] - df_merged.at[i, 'median_value_info_prev']) /
-                         min(df_merged.at[i, 'median_value_info_curr'],
-                             df_merged.at[i, 'median_value_info_prev']) * 100)), 2)
-                median_value_list.append(q)
-            elif df_merged.at[i, 'median_value_info_curr'] == 0 and df_merged.at[
-                i, 'median_value_info_prev'] == 0:
-                median_value_list.append(0)
+                deviation_desc += "Отклонение по столбцу maximum_value_info " + str(
+                    round(row['maximum_value_delta'], 2)) + "%, "
+        if row['median_value_flg'] == 1:
+            if (row['median_value_info_curr'] == 0 or row['median_value_info_prev'] == 0) and \
+            row['median_value_info_curr'] != row['median_value_info_prev']:
+                deviation_desc += "Дельта по показателю median_value не считаема, так как " \
+                                  "значение в одном из срезов = 0, "
             else:
-                median_value_list.append(100)
-            # Расчет дельты средних значений
-            if min(df_merged.at[i, 'average_value_info_curr'], df_merged.at[i, 'average_value_info_prev']) != 0:
-                q = round(
-                    (abs((df_merged.at[i, 'average_value_info_curr'] - df_merged.at[i, 'average_value_info_prev']) /
-                         min(df_merged.at[i, 'average_value_info_curr'],
-                             df_merged.at[i, 'average_value_info_prev']) * 100)), 2)
-                average_value_list.append(q)
-            elif df_merged.at[i, 'average_value_info_curr'] == 0 and df_merged.at[
-                i, 'average_value_info_prev'] == 0:
-                average_value_list.append(0)
+                deviation_desc += "Отклонение по столбцу median_value_info " + str(
+                    round(row['median_value_delta'], 2)) + "%, "
+        if row['average_value_flg'] == 1:
+            if (row['average_value_info_curr'] == 0 or row['average_value_info_prev'] == 0) and \
+            row['average_value_info_curr'] != row['average_value_info_prev']:
+                deviation_desc += "Дельта по показателю average_value не считаема, так как " \
+                                  "значение в одном из срезов = 0, "
             else:
-                average_value_list.append(100)
-            # Расчет суммы атрибутов поля
-            if min(df_merged.at[i, 'sum_attributes_nval_curr'],
-                   df_merged.at[i, 'sum_attributes_nval_prev']) != 0:
-                q = round((abs((df_merged.at[i, 'sum_attributes_nval_curr'] - df_merged.at[
-                    i, 'sum_attributes_nval_prev']) /
-                               min(df_merged.at[i, 'sum_attributes_nval_curr'],
-                                   df_merged.at[i, 'sum_attributes_nval_prev']) * 100)), 2)
-                sum_attributes_list.append(q)
-            elif df_merged.at[i, 'sum_attributes_nval_curr'] == 0 and df_merged.at[
-                 i, 'sum_attributes_nval_prev'] == 0:
-                sum_attributes_list.append(0)
+                deviation_desc += "Отклонение по столбцу average_value_info " + str(
+                    round(row['average_value_delta'], 2)) + "%, "
+        if row['sum_attributes_flg'] == 1:
+            if (row['sum_attributes_nval_curr'] == 0 or row['sum_attributes_nval_prev'] == 0) and \
+            row['sum_attributes_nval_curr'] != row['sum_attributes_nval_prev']:
+                deviation_desc += "Дельта по показателю sum_attributes не считаема, так как " \
+                                  "значение в одном из срезов = 0, "
             else:
-                sum_attributes_list.append(100)
+                deviation_desc += "Отклонение по столбцу sum_attributes_nval " + str(
+                    round(row['sum_attributes_delta'], 2)) + "%, "
+        if row['dublicate_cnt_flg'] == 1:
+            deviation_desc += "Имеются полные дубликаты строк, "
 
-        df_merged['ROWS_AMOUNT_IN_ITERATION_delta'] = ROWS_AMOUNT_IN_ITERATION_list
-        df_merged['amount_completed_delta'] = amount_completed_list
-        df_merged['nulls_amount_delta'] = nulls_amount_list
-        df_merged['distinct_amount_delta'] = distinct_amount_list
-        df_merged['minimum_value_delta'] = minimum_value_list
-        df_merged['maximum_value_delta'] = maximum_value_list
-        df_merged['median_value_delta'] = median_value_list
-        df_merged['average_value_delta'] = average_value_list
-        df_merged['sum_attributes_delta'] = sum_attributes_list
+        df_merged.at[index, 'deviation_desc'] = deviation_desc[:-2]
 
-        # Получение вручную заведённых пороговых значений по полям
-        df_setup = setup_metrics(full_table_name)
-        # Объединение со значениями порогов по 'column_name'
-        df_limit = pd.merge(df_merged['column_name'], df_setup, how='left', on='column_name').fillna(proc)
-        df_merged = pd.merge(df_merged, df_limit, on='column_name')
+    # Требуемые поля для таблицы
+    columns_merged = [
+        'table_name', 'column_name', 'comment_info',
+        'data_type', 'column_id', 'report_date_prev', 'report_date_curr',
+        'rows_amount_cnt_curr', 'ROWS_AMOUNT_IN_ITERATION_delta', 'amount_completed_cnt_curr',
+        'amount_completed_delta', 'nulls_amount_cnt_curr', 'nulls_amount_delta',
+        'distinct_amount_cnt_curr', 'distinct_amount_delta',
+        'minimum_value_info_curr', 'minimum_value_delta',
+        'maximum_value_info_curr', 'maximum_value_delta',
+        'median_value_info_curr', 'median_value_delta',
+        'average_value_info_curr', 'average_value_delta',
+        'sum_attributes_nval_curr', 'sum_attributes_delta',
+        'dublicate_cnt_curr', 'deviation_flg', 'deviation_desc',
+        'period_from_dt', 'period_to_dt'
+    ]
+    logging.info("досчиталось до сюда")
+    # Заменяем дату period_to_dt в старых срезах
+    open_date = dt.datetime.strptime('2100-01-01 00:00:00', "%Y-%m-%d %H:%M:%S")
+    now_date = dt.datetime.now()
 
-        # Расчёт флагов отклонений по каждому из полей
-        df_merged['ROWS_AMOUNT_IN_ITERATION_flg'] = np.select([df_merged['ROWS_AMOUNT_IN_ITERATION_delta'] >
-                                                  df_merged['ROWS_AMOUNT_IN_ITERATION_limit']], [1], 0)
-        df_merged['amount_completed_flg'] = np.select([df_merged['amount_completed_delta'] >
-                                                       df_merged['amount_completed_limit']], [1], 0)
-        df_merged['nulls_amount_flg'] = np.select([df_merged['nulls_amount_delta'] >
-                                                   df_merged['nulls_amount_limit']], [1], 0)
-        df_merged['distinct_amount_flg'] = np.select([df_merged['distinct_amount_delta'] >
-                                                      df_merged['distinct_amount_limit']], [1], 0)
-        df_merged['minimum_value_flg'] = np.select([df_merged['minimum_value_delta'] >
-                                                    df_merged['minimum_value_limit']], [1], 0)
-        df_merged['maximum_value_flg'] = np.select([df_merged['maximum_value_delta'] >
-                                                    df_merged['maximum_value_limit']], [1], 0)
-        df_merged['median_value_flg'] = np.select([df_merged['median_value_delta'] >
-                                                   df_merged['median_value_limit']], [1], 0)
-        df_merged['average_value_flg'] = np.select([df_merged['average_value_delta'] >
-                                                    df_merged['average_value_limit']], [1], 0)
-        df_merged['sum_attributes_flg'] = np.select([df_merged['sum_attributes_delta'] >
-                                                     df_merged['sum_attributes_limit']], [1], 0)
-        df_merged['dublicate_cnt_flg'] = np.select([df_merged['dublicate_cnt_curr'] > 0], [1], 0)
-        # df_merged.replace(np.inf, None, inplace = True)
-        df_merged['deviation_flg'] = 0
-        df_merged['deviation_desc'] = ''
+    spark.sql(f"""
+        UPDATE {table_for_recording}
+        SET period_to_dt = '{now_date.strftime("%Y-%m-%d %H:%M:%S")}'
+        where 1=1
+            AND report_date = '{current_date}'
+            AND table_name = '{full_table_name}'
+            AND period_to_dt = '{open_date}';
+    """)
 
-        # Расчёт общего флага и описания полученных отклонений
-        for index, row in df_merged.iterrows():
-            if row['ROWS_AMOUNT_IN_ITERATION_flg'] == 1 or row['amount_completed_flg'] == 1 or row['nulls_amount_flg'] == 1 \
-            or row['dublicate_cnt_flg'] == 1 or row['distinct_amount_flg'] or row['minimum_value_flg'] == 1 \
-            or row['maximum_value_flg'] == 1 or row['median_value_flg'] == 1 or row['average_value_flg'] \
-            or row['sum_attributes_flg'] == 1:
-                df_merged.at[index, 'deviation_flg'] = 1
+    # Открытие новых строк
+    df_merged['period_from_dt'] = (now_date + dt.timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S")
+    df_merged['period_to_dt'] = dt.datetime.strptime('2100-01-01 00:00:00', '%Y-%m-%d %H:%M:%S')
+    df_merged = df_merged[columns_merged]
 
-            deviation_desc = ""
-            if row['ROWS_AMOUNT_IN_ITERATION_flg'] == 1:
-                if (row['rows_amount_cnt_curr'] == 0 or row['rows_amount_cnt_prev'] == 0) and row[
-                    'rows_amount_cnt_curr'] != \
-                        row['rows_amount_cnt_prev']:
-                    deviation_desc += "Дельта по показателю ROWS_AMOUNT_IN_ITERATION не считаема, так как " \
-                                      "значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу rows_amount_cnt " + str(
-                        round(row['ROWS_AMOUNT_IN_ITERATION_delta'], 2)) + "%, "
-            if row['amount_completed_flg'] == 1:
-                if (row['amount_completed_cnt_curr'] == 0 or ['amount_completed_cnt_prev'] == 0) and \
-                row['amount_completed_cnt_curr'] != row['amount_completed_cnt_prev']:
-                    deviation_desc += "Дельта по показателю amount_completed не считаема, " \
-                                      "так как значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу amount_completed_cnt " + str(
-                        round(row['amount_completed_delta'], 2)) + "%, "
-            if row['nulls_amount_flg'] == 1:
-                if (row['nulls_amount_cnt_curr'] == 0 or row['nulls_amount_cnt_prev'] == 0) and \
-                row['nulls_amount_cnt_curr'] != row['nulls_amount_cnt_curr']:
-                    deviation_desc += "Дельта по показателю nulls_amount не считаема, так как " \
-                                      "значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу nulls_amount_cnt " + str(
-                        round(row['nulls_amount_delta'], 2)) + "%, "
-            if row['distinct_amount_flg'] == 1:
-                if (row['distinct_amount_cnt_curr'] == 0 or row['distinct_amount_cnt_prev'] == 0) and \
-                row['distinct_amount_cnt_curr'] != row['distinct_amount_cnt_prev']:
-                    deviation_desc += "Дельта по показателю distinct_amount не считаема, так как " \
-                                      "значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу distinct_amount_cnt " + str(
-                        round(row['distinct_amount_delta'], 2)) + "%, "
-            if row['minimum_value_flg'] == 1:
-                if (row['minimum_value_info_curr'] == 0 or row['minimum_value_info_prev'] == 0) and \
-                row['minimum_value_info_curr'] != row['minimum_value_info_prev']:
-                    deviation_desc += "Дельта по показателю minimum_value не считаема, так как " \
-                                      "значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу minimum_value_info " + str(
-                        round(row['minimum_value_delta'], 2)) + "%, "
-            if row['maximum_value_flg'] == 1:
-                if (row['maximum_value_info_curr'] == 0 or row['maximum_value_info_prev'] == 0) and \
-                row['maximum_value_info_curr'] != row['maximum_value_info_prev']:
-                    deviation_desc += "Дельта по показателю maximum_value не считаема, так как " \
-                                      "значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу maximum_value_info " + str(
-                        round(row['maximum_value_delta'], 2)) + "%, "
-            if row['median_value_flg'] == 1:
-                if (row['median_value_info_curr'] == 0 or row['median_value_info_prev'] == 0) and \
-                row['median_value_info_curr'] != row['median_value_info_prev']:
-                    deviation_desc += "Дельта по показателю median_value не считаема, так как " \
-                                      "значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу median_value_info " + str(
-                        round(row['median_value_delta'], 2)) + "%, "
-            if row['average_value_flg'] == 1:
-                if (row['average_value_info_curr'] == 0 or row['average_value_info_prev'] == 0) and \
-                row['average_value_info_curr'] != row['average_value_info_prev']:
-                    deviation_desc += "Дельта по показателю average_value не считаема, так как " \
-                                      "значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу average_value_info " + str(
-                        round(row['average_value_delta'], 2)) + "%, "
-            if row['sum_attributes_flg'] == 1:
-                if (row['sum_attributes_nval_curr'] == 0 or row['sum_attributes_nval_prev'] == 0) and \
-                row['sum_attributes_nval_curr'] != row['sum_attributes_nval_prev']:
-                    deviation_desc += "Дельта по показателю sum_attributes не считаема, так как " \
-                                      "значение в одном из срезов = 0, "
-                else:
-                    deviation_desc += "Отклонение по столбцу sum_attributes_nval " + str(
-                        round(row['sum_attributes_delta'], 2)) + "%, "
-            if row['dublicate_cnt_flg'] == 1:
-                deviation_desc += "Имеются полные дубликаты строк, "
-
-            df_merged.at[index, 'deviation_desc'] = deviation_desc[:-2]
-
-        # Требуемые поля для таблицы
-        columns_merged = [
-            'table_name', 'column_name', 'comment_info',
-            'data_type', 'column_id', 'report_date_prev', 'report_date_curr',
-            'rows_amount_cnt_curr', 'ROWS_AMOUNT_IN_ITERATION_delta', 'amount_completed_cnt_curr',
-            'amount_completed_delta', 'nulls_amount_cnt_curr', 'nulls_amount_delta',
-            'distinct_amount_cnt_curr', 'distinct_amount_delta',
-            'minimum_value_info_curr', 'minimum_value_delta',
-            'maximum_value_info_curr', 'maximum_value_delta',
-            'median_value_info_curr', 'median_value_delta',
-            'average_value_info_curr', 'average_value_delta',
-            'sum_attributes_nval_curr', 'sum_attributes_delta',
-            'dublicate_cnt_curr', 'deviation_flg', 'deviation_desc',
-            'period_from_dt', 'period_to_dt'
-        ]
-        logging.info("досчиталось до сюда")
-        # Заменяем дату period_to_dt в старых срезах
-        open_date = dt.datetime.strptime('2100-01-01 00:00:00', "%Y-%m-%d %H:%M:%S")
-        now_date = dt.datetime.now()
-
-        spark.sql(f"""
-            UPDATE {table_for_recording}
-            SET period_to_dt = '{now_date.strftime("%Y-%m-%d %H:%M:%S")}'
-            where 1=1
-                AND report_date = '{current_date}'
-                AND table_name = '{full_table_name}'
-                AND period_to_dt = '{open_date}';
-        """)
-
-        # Открытие новых строк
-        df_merged['period_from_dt'] = (now_date + dt.timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S")
-        df_merged['period_to_dt'] = dt.datetime.strptime('2100-01-01 00:00:00', '%Y-%m-%d %H:%M:%S')
-        df_merged = df_merged[columns_merged]
-
-        logging.info(f"4. Выполнен расчёт отклонений за {df_merged['report_date_curr'].unique()[0]}: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        df_merged = df_merged[['table_name', 'column_name', 'comment_info',
-                               'data_type', 'column_id', 'report_date_prev', 'report_date_curr',
-                               'rows_amount_cnt_curr', 'ROWS_AMOUNT_IN_ITERATION_delta', 'amount_completed_cnt_curr',
-                               'amount_completed_delta', 'nulls_amount_cnt_curr', 'nulls_amount_delta',
-                               'distinct_amount_cnt_curr', 'distinct_amount_delta',
-                               'minimum_value_info_curr', 'minimum_value_delta',
-                               'maximum_value_info_curr', 'maximum_value_delta',
-                               'median_value_info_curr', 'median_value_delta',
-                               'average_value_info_curr', 'average_value_delta',
-                               'sum_attributes_nval_curr', 'sum_attributes_delta',
-                               'dublicate_cnt_curr', 'deviation_flg', 'deviation_desc',
-                               'period_from_dt', 'period_to_dt']]
-        logging.info("досчиталось до сюда нет")
-        return df_merged
+    logging.info(f"4. Выполнен расчёт отклонений за {df_merged['report_date_curr'].unique()[0]}: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    df_merged = df_merged[['table_name', 'column_name', 'comment_info',
+                           'data_type', 'column_id', 'report_date_prev', 'report_date_curr',
+                           'rows_amount_cnt_curr', 'ROWS_AMOUNT_IN_ITERATION_delta', 'amount_completed_cnt_curr',
+                           'amount_completed_delta', 'nulls_amount_cnt_curr', 'nulls_amount_delta',
+                           'distinct_amount_cnt_curr', 'distinct_amount_delta',
+                           'minimum_value_info_curr', 'minimum_value_delta',
+                           'maximum_value_info_curr', 'maximum_value_delta',
+                           'median_value_info_curr', 'median_value_delta',
+                           'average_value_info_curr', 'average_value_delta',
+                           'sum_attributes_nval_curr', 'sum_attributes_delta',
+                           'dublicate_cnt_curr', 'deviation_flg', 'deviation_desc',
+                           'period_from_dt', 'period_to_dt']]
+    logging.info("досчиталось до сюда нет")
+    return df_merged
 
     # Запись данных в итоговую таблицу
     def write_to_sql(current_date, full_table_name, date_field):
